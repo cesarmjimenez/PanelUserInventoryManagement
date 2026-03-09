@@ -1,0 +1,79 @@
+﻿@page "/login"
+@using PanelUserInventoryManagement.Auth
+@using static System.Net.WebRequestMethods
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject CustomAuthStateProvider AuthProvider
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-body">
+                <h3 class="text-center mb-4">Control de Inventario</h3>
+                <div class="mb-3">
+                    <label>Usuario</label>
+                    <input @bind="userName" class="form-control" />
+                </div>
+                <div class="mb-3">
+                    <label>Contraseña</label>
+                    <input @bind="password" type="password" class="form-control" />
+                </div>
+                <button class="btn btn-primary w-100" @onclick="HandleLogin">Iniciar Sesión</button>
+
+                @if (errorMsg != null)
+                {
+                    <div class="alert-danger mt-3">@errorMsg</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code{
+    private string userName = "";
+    private string password = "";
+    private string? errorMsg;
+
+    private async Task HandleLogin()
+    {
+
+        errorMsg = null;
+
+        try
+        {
+            var loginData = new
+            {
+                UserName = userName,
+                PasswordHash = password
+            };
+            var response = await Http.PostAsJsonAsync("api/Users/Login", loginData);
+
+            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+            if (!response.IsSuccessStatusCode || result == null || !result.Succeeded)
+            {
+                errorMsg = "Usuario o contraseña incorrectos";
+                return;
+            }
+
+            AuthProvider.MarkUserAsAuthenticated(result.Data!.Token!);
+            Nav.NavigateTo("/");
+        }
+        catch (Exception)
+        {
+            errorMsg = "No se pudo conectar al servidor";
+        }
+    }
+
+    public class LoginResponse
+    {
+        public bool Succeeded { get; set; }
+
+        public UserData? Data { get; set; }
+    }
+
+    public class UserData
+    {
+        public string? Token { get; set; }
+    }
+}

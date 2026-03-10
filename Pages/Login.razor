@@ -52,7 +52,7 @@
 
             if (!response.IsSuccessStatusCode || result == null || !result.Succeeded)
             {
-                errorMsg = "Usuario o contraseña incorrectos";
+                errorMsg = result?.Message ?? "Usuario o contraseña incorrectos";
                 return;
             }
 
@@ -69,7 +69,9 @@
     {
         public bool Succeeded { get; set; }
 
-        public UserData? Data { get; set; }
+        public string? Message { get; set; }
+
+            public UserData? Data { get; set; }
     }
 
     public class UserData

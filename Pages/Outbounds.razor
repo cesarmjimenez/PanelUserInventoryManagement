@@ -1,0 +1,284 @@
+﻿@page "/outbounds"
+@using Microsoft.AspNetCore.Components.Authorization
+@using PanelUserInventoryManagement.Auth
+@using Radzen
+@using Radzen.Blazor
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject NotificationService NotificationService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<RadzenStack Gap="1.5rem" class="rz-p-4">
+
+    <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="0.75rem">
+        <RadzenIcon Icon="list_alt" Style="font-size:2rem; color: var(--rz-primary);" />
+        <RadzenText TextStyle="TextStyle.H5" Style="margin:0; font-weight:700;">
+            Listado de Salidas de Inventario
+        </RadzenText>
+    </RadzenStack>
+
+    <RadzenCard>
+        <RadzenStack Gap="1.25rem">
+            <RadzenText TextStyle="TextStyle.Subtitle1" Style="font-weight:600;">Filtros</RadzenText>
+            <RadzenRow Gap="1rem">
+                <RadzenColumn Size="12" SizeMD="3">
+                    <RadzenFormField Text="Fecha Desde" Variant="Variant.Outlined" Style="width:100%;">
+                        <RadzenDatePicker @bind-Value="fromDate" DateFormat="dd/MM/yyyy" Style="width:100%;" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3">
+                    <RadzenFormField Text="Fecha Hasta" Variant="Variant.Outlined" Style="width:100%;">
+                        <RadzenDatePicker @bind-Value="toDate" DateFormat="dd/MM/yyyy" Style="width:100%;" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3">
+                    <RadzenFormField Text="Sucursal Destino" Variant="Variant.Outlined" Style="width:100%;">
+                        <RadzenDropDown @bind-Value="selectedBranchId"
+                                        Data="branches"
+                                        TextProperty="Name"
+                                        ValueProperty="Id"
+                                        Placeholder="Todas las sucursales"
+                                        ShowEmptyItem="true"
+                                        Style="width:100%;" />
+                    </RadzenFormField>
+                </RadzenColumn>
+                <RadzenColumn Size="12" SizeMD="3" Style="display:flex; align-items:flex-end; gap:0.5rem;">
+                    <RadzenButton Text="Buscar"
+                                  Icon="search"
+                                  ButtonStyle="ButtonStyle.Primary"
+                                  Style="height:48px; flex:1;"
+                                  IsBusy="isLoading"
+                                  Click="LoadOutbounds" />
+                    <RadzenButton Icon="clear"
+                                  ButtonStyle="ButtonStyle.Light"
+                                  Style="height:48px;"
+                                  Click="ClearFilters" />
+                </RadzenColumn>
+            </RadzenRow>
+        </RadzenStack>
+    </RadzenCard>
+
+    <RadzenCard>
+        <RadzenStack Gap="1rem">
+            <RadzenRow JustifyContent="JustifyContent.SpaceBetween" AlignItems="AlignItems.Center">
+                <RadzenColumn>
+                    <RadzenText TextStyle="TextStyle.Subtitle1" Style="font-weight:600;">
+                        Resultados (@outbounds.Count salidas)
+                    </RadzenText>
+                </RadzenColumn>
+                @if (selectedOutbound != null && selectedOutbound.Status == "Enviada a Sucursal")
+                {
+                    <RadzenColumn Style="display:flex; justify-content:flex-end;">
+                        <RadzenButton Text="Marcar como Recibida"
+                                      Icon="check_circle"
+                                      ButtonStyle="ButtonStyle.Success"
+                                      IsBusy="isReceiving"
+                                      BusyText="Procesando..."
+                                      Click="ReceiveOutbound" />
+                    </RadzenColumn>
+                }
+            </RadzenRow>
+
+            <RadzenDataGrid Data="outbounds"
+                            TItem="OutboundListDto"
+                            AllowSorting="true"
+                            AllowPaging="true"
+                            PageSize="10"
+                            SelectionMode="DataGridSelectionMode.Single"
+                            @bind-Value="gridSelection"
+                            RowSelect="OnRowSelect"
+                            Style="width:100%;">
+                <Columns>
+                    <RadzenDataGridColumn TItem="OutboundListDto" Property="OutboundNumber" Title="Número de Salida" Width="180px" />
+
+                    <RadzenDataGridColumn TItem="OutboundListDto" Property="OutboundDate" Title="Fecha" Width="140px">
+                        <Template Context="item">
+                            @item.OutboundDate.ToString("dd/MM/yyyy HH:mm")
+                        </Template>
+                    </RadzenDataGridColumn>
+
+                    <RadzenDataGridColumn TItem="OutboundListDto" Property="TotalUnits" Title="Unidades Totales" Width="140px">
+                        <Template Context="item">
+                            @item.TotalUnits.ToString("N0")
+                        </Template>
+                    </RadzenDataGridColumn>
+
+                    <RadzenDataGridColumn TItem="OutboundListDto" Property="TotalCost" Title="Costo Total" Width="130px">
+                        <Template Context="item">
+                            L @item.TotalCost.ToString("N2")
+                        </Template>
+                    </RadzenDataGridColumn>
+
+                    <RadzenDataGridColumn TItem="OutboundListDto" Property="Status" Title="Estado" Width="180px">
+                        <Template Context="item">
+                            <RadzenBadge Text="@item.Status"
+                                         BadgeStyle="@(item.Status == "Enviada a Sucursal" ? BadgeStyle.Warning : BadgeStyle.Success)" />
+                        </Template>
+                    </RadzenDataGridColumn>
+
+                    <RadzenDataGridColumn TItem="OutboundListDto" Property="ReceivedBy" Title="Recibido Por" Width="150px">
+                        <Template Context="item">
+                            @if (item.ReceivedDate.HasValue)
+                            {
+                                <RadzenStack Gap="0">
+                                    <RadzenText TextStyle="TextStyle.Body2" Style="font-weight:600;">@item.ReceivedBy</RadzenText>
+                                    <RadzenText TextStyle="TextStyle.Caption" Style="color:gray;">
+                                        @item.ReceivedDate.Value.ToString("dd/MM/yyyy HH:mm")
+                                    </RadzenText>
+                                </RadzenStack>
+                            }
+                            else
+                            {
+                                <RadzenText TextStyle="TextStyle.Caption" Style="color:gray;">—</RadzenText>
+                            }
+                        </Template>
+                    </RadzenDataGridColumn>
+                </Columns>
+            </RadzenDataGrid>
+        </RadzenStack>
+    </RadzenCard>
+
+</RadzenStack>
+
+@code {
+    private List<OutboundListDto> outbounds = [];
+    private List<BranchDto> branches = [];
+
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private Guid? selectedBranchId;
+
+    private bool isLoading = false;
+    private bool isReceiving = false;
+
+    private OutboundListDto? selectedOutbound;
+    private IList<OutboundListDto> gridSelection = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        try
+        {
+            branches = await Http.GetFromJsonAsync<List<BranchDto>>("api/Locations/GetBranches") ?? [];
+        }
+        catch
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "No se pudieron cargar las sucursales.");
+        }
+
+        await LoadOutbounds();
+    }
+
+    private async Task LoadOutbounds()
+    {
+        isLoading = true;
+        selectedOutbound = null;
+        gridSelection = [];
+
+        try
+        {
+            var query = new List<string>();
+            if (fromDate.HasValue)
+                query.Add($"FromDate={fromDate.Value:yyyy-MM-dd}");
+            if (toDate.HasValue)
+                query.Add($"ToDate={toDate.Value:yyyy-MM-dd}");
+            if (selectedBranchId.HasValue && selectedBranchId != Guid.Empty)
+                query.Add($"DestinationId={selectedBranchId}");
+
+            var url = "api/Outbounds/GetOutbounds";
+            if (query.Count > 0)
+                url += "?" + string.Join("&", query);
+
+            var result = await Http.GetFromJsonAsync<List<OutboundListDto>>(url);
+            outbounds = result ?? [];
+        }
+        catch
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "No se pudieron cargar las salidas.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void ClearFilters()
+    {
+        fromDate = null;
+        toDate = null;
+        selectedBranchId = null;
+    }
+
+    private void OnRowSelect(OutboundListDto item)
+    {
+        selectedOutbound = item;
+    }
+
+    private async Task ReceiveOutbound()
+    {
+        if (selectedOutbound == null) return;
+
+        isReceiving = true;
+        try
+        {
+            var payload = new { OutboundId = selectedOutbound.Id };
+            var response = await Http.PostAsJsonAsync("api/Outbounds/RecievedOutbound", payload);
+            var result = await response.Content.ReadFromJsonAsync<ApiResponse<OutboundResponseDto>>();
+
+            if (!response.IsSuccessStatusCode || result == null || !result.Succeeded)
+            {
+                NotificationService.Notify(NotificationSeverity.Error, "Error",
+                    result?.Message ?? "No se pudo registrar la recepción.");
+                return;
+            }
+
+            NotificationService.Notify(NotificationSeverity.Success, "Éxito",
+                "Salida marcada como recibida correctamente.");
+
+            await LoadOutbounds();
+        }
+        catch
+        {
+            NotificationService.Notify(NotificationSeverity.Error, "Error", "No se pudo conectar al servidor.");
+        }
+        finally
+        {
+            isReceiving = false;
+        }
+    }
+
+    public class OutboundListDto
+    {
+        public Guid Id { get; set; }
+        public string? OutboundNumber { get; set; }
+        public DateTime OutboundDate { get; set; }
+        public decimal TotalUnits { get; set; }
+        public decimal TotalCost { get; set; }
+        public string? Status { get; set; }
+        public string? ReceivedBy { get; set; }
+        public DateTime? ReceivedDate { get; set; }
+    }
+
+    public class BranchDto
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+
+    public class OutboundResponseDto
+    {
+        public Guid Id { get; set; }
+        public string? OutboundNumber { get; set; }
+        public string? Status { get; set; }
+        public DateTime OutboundDate { get; set; }
+        public decimal TotalCost { get; set; }
+    }
+
+    public class ApiResponse<T>
+    {
+        public bool Succeeded { get; set; }
+        public string? Message { get; set; }
+        public T? Data { get; set; }
+    }
+}

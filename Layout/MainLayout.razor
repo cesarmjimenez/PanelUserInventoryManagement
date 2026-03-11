@@ -1,5 +1,8 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@using PanelUserInventoryManagement.Auth
 @inherits LayoutComponentBase
+@inject CustomAuthStateProvider AuthProvider
+@inject NavigationManager Nav
 
 <AuthorizeView>
     <Authorized>
@@ -10,7 +13,10 @@
 
             <main>
                 <div class="top-row px-4">
-                    <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+                    <button class="btn btn-link" style="color: var(--rz-primary);" @onclick="Logout">
+                        <span class="material-icons-outlined" style="font-size:1rem; vertical-align:middle; margin-right:4px;">sensor_door</span>
+                        Cerrar Sesión
+                    </button>
                 </div>
 
                 <article class="content px-4">
@@ -25,3 +31,13 @@
         </div>
     </NotAuthorized>
 </AuthorizeView>
+
+@code
+{
+    private void Logout()
+    {
+        AuthProvider.MarkUserAsLoggedOut();
+
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

@@ -6,6 +6,7 @@
 @inject NavigationManager Nav
 @inject NotificationService NotificationService
 @using System.Security.Claims
+@using System.Text.Json
 @inject AuthenticationStateProvider AuthStateProvider
 
 @if (!isAuthorized)
@@ -217,9 +218,6 @@ else
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
 
-        foreach (var claim in user.Claims)
-            Console.WriteLine($"Claim: {claim.Type} = {claim.Value}");
-
         isAuthorized = user.IsInRole("Jefe de Bodega");
 
         if (isAuthorized)
@@ -275,7 +273,7 @@ else
 
     private async Task SubmitOutbound()
     {
-        if (selectedBranchId == Guid.Empty || outboundItems.Count == 0) 
+        if (selectedBranchId == Guid.Empty || outboundItems.Count == 0)
             return;
 
         isSubmitting = true;
@@ -295,7 +293,16 @@ else
             };
 
             var response = await Http.PostAsJsonAsync("api/Outbounds/CreateOutbound", payload);
-            var result = await response.Content.ReadFromJsonAsync<ApiResponse<OutboundResponseDto>>();
+
+            var json = await response.Content.ReadAsStringAsync();
+
+            ApiResponse<OutboundResponseDto>? result = null;
+            try
+            {
+                result = JsonSerializer.Deserialize<ApiResponse<OutboundResponseDto>>(json,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch { }
 
             if (!response.IsSuccessStatusCode || result == null || !result.Succeeded)
             {
